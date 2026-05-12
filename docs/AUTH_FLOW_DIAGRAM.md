@@ -1,0 +1,340 @@
+# CareConnect Authentication Flow
+
+## 📋 System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         NEXT.JS APP                              │
+│                                                                  │
+│  ┌────────────────┐         ┌──────────────────┐               │
+│  │  Public Routes  │         │ Protected Routes │               │
+│  │                │         │                  │               │
+│  │  /login        │         │  /dashboard      │               │
+│  │  /register     │         │  /appointments   │               │
+│  │  /             │         │  /referrals      │               │
+│  └────────────────┘         │  /messages       │               │
+│                             └──────────────────┘               │
+│                                      ▲                           │
+│                                      │                           │
+│                       ┌──────────────┴──────────────┐           │
+│                       │    middleware.ts             │           │
+│                       │  - Checks auth status        │           │
+│                       │  - Redirects if needed       │           │
+│                       │  - Refreshes session         │           │
+│                       └──────────────┬──────────────┘           │
+│                                      │                           │
+└──────────────────────────────────────┼───────────────────────────┘
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      SUPABASE BACKEND                            │
+│                                                                  │
+│  ┌──────────────────┐         ┌──────────────────┐             │
+│  │   Auth Service   │         │   PostgreSQL DB  │             │
+│  │                  │         │                  │             │
+│  │  - User login    │◄────────┤  - profiles      │             │
+│  │  - User signup   │         │  - referrals     │             │
+│  │  - Session mgmt  │         │  - appointments  │             │
+│  │  - JWT tokens    │         │  - messages      │             │
+│  └──────────────────┘         │  - sessions      │             │
+│                               │  - audit_logs    │             │
+│                               └──────────────────┘             │
+│                                       │                         │
+│                               ┌───────▼──────────┐             │
+│                               │   RLS Policies   │             │
+│                               │  - Row security  │             │
+│                               │  - Role checking │             │
+│                               └──────────────────┘             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## 🔄 Registration Flow
+
+```
+User fills form                Browser                    Server                   Supabase
+     │                             │                         │                         │
+     │──────────────────────────►│                         │                         │
+     │    1. Submit form           │                         │                         │
+     │                             │                         │                         │
+     │                             │──────────────────────►│                         │
+     │                             │  2. Call register()     │                         │
+     │                             │     action              │                         │
+     │                             │                         │                         │
+     │                             │                         │──────────────────────►│
+     │                             │                         │  3. Create auth user  │
+     │                             │                         │     with metadata     │
+     │                             │                         │                         │
+     │                             │                         │◄──────────────────────│
+     │                             │                         │  4. Return user ID    │
+     │                             │                         │                         │
+     │                             │                         │──────────────────────►│
+     │                             │                         │  5. Insert profile    │
+     │                             │                         │     with role         │
+     │                             │                         │                         │
+     │                             │                         │◄──────────────────────│
+     │                             │                         │  6. Profile created   │
+     │                             │                         │                         │
+     │                             │◄──────────────────────│                         │
+     │◄──────────────────────────│  7. Set auth cookies    │                         │
+     │    Redirect to /dashboard   │     & redirect          │                         │
+```
+
+## 🔐 Login Flow
+
+```
+User enters credentials        Browser                    Server                   Supabase
+     │                             │                         │                         │
+     │──────────────────────────►│                         │                         │
+     │    1. Submit login form     │                         │                         │
+     │                             │                         │                         │
+     │                             │──────────────────────►│                         │
+     │                             │  2. Call login()        │                         │
+     │                             │     action              │                         │
+     │                             │                         │                         │
+     │                             │                         │──────────────────────►│
+     │                             │                         │  3. Verify credentials│
+     │                             │                         │                         │
+     │                             │                         │◄──────────────────────│
+     │                             │                         │  4. Return session    │
+     │                             │                         │     & JWT token       │
+     │                             │                         │                         │
+     │                             │◄──────────────────────│                         │
+     │◄──────────────────────────│  5. Set cookies &       │                         │
+     │    Redirect to /dashboard   │     redirect            │                         │
+```
+
+## 🛡️ Protected Route Access
+
+```
+User visits /dashboard         Middleware                 Supabase                 Page Component
+     │                             │                         │                         │
+     │──────────────────────────►│                         │                         │
+     │    1. Request page          │                         │                         │
+     │                             │                         │                         │
+     │                             │──────────────────────►│                         │
+     │                             │  2. Verify session      │                         │
+     │                             │     from cookies        │                         │
+     │                             │                         │                         │
+     │                             │◄──────────────────────│                         │
+     │                             │  3. Return user info    │                         │
+     │                             │                         │                         │
+     │                             │                         │                         │
+     │                             ├─────────────────────────────────────────────────►│
+     │                             │  4. Allow request                                │
+     │                             │                                                  │
+     │◄────────────────────────────────────────────────────────────────────────────│
+     │    5. Render protected page                                                    │
+```
+
+## 🚫 Unauthorized Access Attempt
+
+```
+User (not logged in)           Middleware                 Supabase
+     │                             │                         │
+     │──────────────────────────►│                         │
+     │    1. Try /dashboard        │                         │
+     │                             │                         │
+     │                             │──────────────────────►│
+     │                             │  2. Check session       │
+     │                             │                         │
+     │                             │◄──────────────────────│
+     │                             │  3. No valid session    │
+     │                             │                         │
+     │◄──────────────────────────│                         │
+     │    4. Redirect to /login    │                         │
+```
+
+## 🗄️ Database Query with RLS
+
+```
+User Query                     Supabase                   RLS Policy                Database
+     │                             │                         │                         │
+     │──────────────────────────►│                         │                         │
+     │  SELECT * FROM referrals    │                         │                         │
+     │                             │                         │                         │
+     │                             │──────────────────────►│                         │
+     │                             │  Check user role        │                         │
+     │                             │  & permissions          │                         │
+     │                             │                         │                         │
+     │                             │                         │──────────────────────►│
+     │                             │                         │  Filter query based   │
+     │                             │                         │  on role              │
+     │                             │                         │                         │
+     │                             │                         │◄──────────────────────│
+     │                             │◄──────────────────────│  Return filtered data │
+     │◄──────────────────────────│                         │                         │
+     │  Only see allowed records   │                         │                         │
+```
+
+## 📊 Role-Based Access Matrix
+
+```
+┌────────────────────┬──────────┬─────────────┬────────┐
+│   Resource         │ Student  │ PSG Member  │ Admin  │
+├────────────────────┼──────────┼─────────────┼────────┤
+│ Own Profile        │   R/W    │    R/W      │  R/W   │
+│ Other Profiles     │   -      │     R       │  R/W   │
+│ Own Referrals      │   R/W    │     -       │  R/W   │
+│ Assigned Referrals │   -      │    R/W      │  R/W   │
+│ All Referrals      │   -      │     -       │  R/W   │
+│ Own Appointments   │   R/W    │     -       │  R/W   │
+│ Assigned Appts     │   -      │    R/W      │  R/W   │
+│ Messages (sent)    │   R/W    │    R/W      │  R/W   │
+│ Messages (others)  │   -      │     -       │  R/W   │
+│ Screening Results  │   R/W    │     R       │  R/W   │
+│ Session Notes      │   R      │    R/W      │  R/W   │
+│ Audit Logs         │   -      │     -       │   R    │
+└────────────────────┴──────────┴─────────────┴────────┘
+
+Legend: R = Read, W = Write, - = No Access
+```
+
+## 🔑 Session Management
+
+```
+Login                         Session Active              Logout
+  │                                 │                        │
+  │ 1. User signs in                │                        │
+  │                                 │                        │
+  ├──► JWT Token Generated          │                        │
+  │                                 │                        │
+  ├──► Stored in HTTP-only cookie   │                        │
+  │                                 │                        │
+  │                                 │ 2. Token auto-refresh  │
+  │                                 │    on each request     │
+  │                                 │                        │
+  │                                 │ 3. Middleware verifies │
+  │                                 │    token validity      │
+  │                                 │                        │
+  │                                 │                        │ 4. User clicks logout
+  │                                 │                        │
+  │                                 │                        ├──► Delete token
+  │                                 │                        │
+  │                                 │                        ├──► Clear cookies
+  │                                 │                        │
+  │                                 │                        └──► Redirect to /login
+```
+
+## 📁 File Responsibilities
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     CLIENT SIDE                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  src/lib/supabase/client.ts                                 │
+│  └─► Creates browser Supabase client                        │
+│      Used in: Client Components, Hooks, Realtime            │
+│                                                              │
+│  src/hooks/useAuth.ts                                       │
+│  └─► React hook for client auth state                       │
+│      Returns: user, profile, loading, isAuthenticated       │
+│                                                              │
+│  src/app/login/page.tsx                                     │
+│  └─► Client component with form                             │
+│      Calls: login() server action                           │
+│                                                              │
+│  src/app/register/page.tsx                                  │
+│  └─► Client component with form                             │
+│      Calls: register() server action                        │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                     SERVER SIDE                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  src/lib/supabase/server.ts                                 │
+│  └─► Creates server Supabase client                         │
+│      Used in: Server Components, Server Actions             │
+│                                                              │
+│  src/lib/actions/auth.ts                                    │
+│  └─► Server actions for auth                                │
+│      Functions: login(), register(), logout(), getUser()    │
+│                                                              │
+│  src/middleware.ts                                          │
+│  └─► Route protection & session refresh                     │
+│      Runs on: Every request (except static files)           │
+│                                                              │
+│  src/app/dashboard/page.tsx                                 │
+│  └─► Server component (protected)                           │
+│      Calls: getUser() to verify auth                        │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                     VALIDATION                               │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  src/lib/validations/auth.ts                                │
+│  └─► Zod schemas for forms                                  │
+│      Schemas: loginSchema, registerSchema                   │
+│      Validates: Email format, password strength, etc.       │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                     UTILITIES                                │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  src/lib/utils/auth.ts                                      │
+│  └─► Helper functions                                       │
+│      Functions: isStudent(), isPSGMember(), formatRole()    │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 🎯 Key Concepts
+
+### 1. Server vs Client Components
+
+```typescript
+// Server Component (default)
+export default async function Page() {
+  const user = await getUser(); // ✅ Can use async/await
+  return <div>{user.name}</div>;
+}
+
+// Client Component ('use client' directive)
+("use client");
+export default function Page() {
+  const { user } = useAuth(); // ✅ Can use hooks
+  return <div>{user?.name}</div>;
+}
+```
+
+### 2. RLS (Row Level Security)
+
+```sql
+-- Students can only see their own referrals
+CREATE POLICY "Students see own referrals"
+  ON referrals FOR SELECT
+  USING (student_id = auth.uid());
+
+-- PSG members see assigned referrals
+CREATE POLICY "PSG see assigned"
+  ON referrals FOR SELECT
+  USING (
+    get_user_role(auth.uid()) = 'psg_member'
+    AND assigned_psg_member_id = auth.uid()
+  );
+```
+
+### 3. Middleware Protection
+
+```typescript
+// Automatically protects these routes
+const protectedRoutes = [
+  "/dashboard",
+  "/appointments",
+  "/referrals",
+  "/messages",
+];
+
+// If not authenticated → redirect to /login
+// If authenticated on /login → redirect to /dashboard
+```
+
+---
+
+**This diagram shows the complete authentication architecture of CareConnect!**
