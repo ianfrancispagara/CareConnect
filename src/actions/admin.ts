@@ -1,6 +1,7 @@
 "use server";
 
 import { createHash, randomBytes } from "crypto";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type {
@@ -348,7 +349,13 @@ export async function generatePsgInviteLink() {
       return { success: false, error: "Failed to generate invite link" };
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const requestOrigin = (await headers()).get("origin");
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      requestOrigin ||
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://127.0.0.1:3000");
     const inviteLink = `${baseUrl}/register?invite=${encodeURIComponent(token)}`;
 
     return {
