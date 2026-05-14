@@ -28,7 +28,7 @@ The Mental Health Screening Module enables:
 ### 2. PSG Member Review Interface
 
 - Dashboard with filterable screening results
-- Summary cards: Pending Reviews, High Risk Cases, Total Reviewed
+- Summary cards: Pending Reviews, You are required to proceed Case assessment, Total Reviewed
 - Smart sorting: unreviewed → severity → date
 - Detailed screening view with:
   - Individual question responses and scores
@@ -48,22 +48,18 @@ The Mental Health Screening Module enables:
 ### Tables (5)
 
 1. **screening_questions**
-
    - Stores preset and custom screening questions
    - Fields: question_text, question_type, options, weight, is_preset, order
 
 2. **screening_results**
-
    - Main screening results with severity assessment
    - Fields: student_id, total_score, severity_level, color_code, requires_immediate_attention, reviewed_by, reviewed_at
 
 3. **screening_responses**
-
    - Individual answers to screening questions
    - Fields: screening_result_id, question_id, answer, score
 
 4. **case_assessments**
-
    - Tracks ongoing case assessments
    - Fields: screening_result_id, student_id, psg_member_id, status, notes
 
@@ -140,7 +136,6 @@ npm install @radix-ui/react-slot @radix-ui/react-tabs @radix-ui/react-separator 
 ### For Students
 
 1. **Take Screening**
-
    - Navigate to `/dashboard/screening/take`
    - Answer 10 mental health questions
    - View color-coded results with recommendations
@@ -155,7 +150,6 @@ npm install @radix-ui/react-slot @radix-ui/react-tabs @radix-ui/react-separator 
 ### For PSG Members
 
 1. **Review Screenings**
-
    - Navigate to `/dashboard/psg/screenings`
    - Filter by: All, Pending, Reviewed
    - View summary cards with key metrics
@@ -266,7 +260,6 @@ function calculateSeverity(responses: QuestionResponse[]) {
 ## Performance
 
 - **Indexes**: Created on frequently queried columns:
-
   - `screening_results`: student_id, severity_level, reviewed_at, created_at
   - `screening_responses`: screening_result_id
   - `case_assessments`: student_id, psg_member_id, status

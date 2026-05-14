@@ -175,6 +175,17 @@ export async function getScreeningById(screeningId: string) {
       return { error: "Failed to fetch responses" };
     }
 
+    const { data: caseAssessment, error: caseAssessmentError } = await supabase
+      .from("case_assessments")
+      .select("*")
+      .eq("screening_result_id", screeningId)
+      .maybeSingle();
+
+    if (caseAssessmentError && caseAssessmentError.code !== "PGRST116") {
+      console.error("Error fetching case assessment:", caseAssessmentError);
+      return { error: "Failed to fetch case assessment" };
+    }
+
     // Get questions to match with responses
     const { data: questions, error: questionsError } = await supabase
       .from("screening_questions")
@@ -233,6 +244,7 @@ export async function getScreeningById(screeningId: string) {
       data: {
         screening: result,
         responses: enhancedResponses,
+        caseAssessment: caseAssessment || null,
       },
       success: true,
     };
@@ -379,9 +391,9 @@ export async function updateScreeningReview(
 }
 
 /**
- * Create a case assessment for a screening
+ * Create or update a case assessment for a screening
  */
-export async function createCaseAssessment(screeningId: string) {
+export async function createCaseAssessment(screeningId: string, notes: string) {
   try {
     const supabase = await createClient();
 
@@ -410,6 +422,44 @@ export async function createCaseAssessment(screeningId: string) {
       return { error: "Unauthorized access" };
     }
 
+    const { data: existingAssessment, error: existingAssessmentError } =
+      await supabase
+        .from("case_assessments")
+        .select("*")
+        .eq("screening_result_id", screeningId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+    if (
+      existingAssessmentError &&
+      existingAssessmentError.code !== "PGRST116"
+    ) {
+      console.error(
+        "Error checking existing case assessment:",
+        existingAssessmentError,
+      );
+      return { error: "Failed to prepare case assessment" };
+    }
+
+    if (existingAssessment) {
+      const { data, error } = await supabase
+        .from("case_assessments")
+        .update({
+          notes,
+          status: "pending",
+        })
+        .eq("id", existingAssessment.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error updating case assessment:", error);
+        return { error: "Failed to save case assessment" };
+      }
+
+      return { data, success: true };
+    }
+
     // Create case assessment (no PSG member assigned yet)
     const { data, error } = await supabase
       .from("case_assessments")
@@ -418,6 +468,7 @@ export async function createCaseAssessment(screeningId: string) {
         user_id: user.id,
         psg_member_id: null, // Will be assigned later by PSG member
         status: "pending",
+        notes,
       })
       .select()
       .single();

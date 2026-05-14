@@ -42,7 +42,7 @@ export function ScreeningResultDisplay({
           icon: AlertCircle,
           color: "#EF4444",
           bgColor: "#FEE2E2",
-          title: "High Risk",
+          title: "You are required to proceed Case assessment",
           message:
             "Your screening indicates high levels of distress. We strongly recommend immediate support. A PSG member will reach out to you soon.",
         };
@@ -133,8 +133,8 @@ export function ScreeningResultDisplay({
                 {result.color_code === "red"
                   ? "High"
                   : result.color_code === "yellow"
-                  ? "Moderate"
-                  : "Low"}
+                    ? "Moderate"
+                    : "Low"}
               </p>
             </div>
           </div>

@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { DashboardClientWrapper } from "@/components/DashboardClientWrapper";
 import { AlertCircle, CheckCircle } from "lucide-react";
 import { ScreeningResultDisplay } from "@/components/screening/ScreeningResultDisplay";
-import { ScreeningResult, ScreeningResponse } from "@/lib/types/screening";
+import {
+  ScreeningResult,
+  ScreeningResponse,
+  type CaseAssessment,
+} from "@/lib/types/screening";
 import {
   getScreeningById,
   updateScreeningReview,
@@ -22,6 +26,9 @@ export default function ScreeningDetailPage({
   const { id } = use(params);
   const [screening, setScreening] = useState<ScreeningResult | null>(null);
   const [responses, setResponses] = useState<ScreeningResponse[]>([]);
+  const [caseAssessment, setCaseAssessment] = useState<CaseAssessment | null>(
+    null,
+  );
   const [reviewNotes, setReviewNotes] = useState("");
   const [triageLevel, setTriageLevel] = useState<PsgTriageLevel>("moderate");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,7 +55,15 @@ export default function ScreeningDetailPage({
         }
 
         setScreening(result.data.screening);
+        // Default triage decision should reflect screening severity
+        const colorCode = result.data.screening?.color_code;
+        if (colorCode) {
+          if (colorCode === "red") setTriageLevel("needs_immediate_help");
+          else if (colorCode === "yellow") setTriageLevel("moderate");
+          else setTriageLevel("good");
+        }
         setResponses(result.data.responses);
+        setCaseAssessment(result.data.caseAssessment || null);
 
         // Get student number from localStorage
         const storedNumber = localStorage.getItem(
@@ -116,6 +131,23 @@ export default function ScreeningDetailPage({
     if (!isMounted || !screening) return "Student";
     return studentNumber ? `Student ${studentNumber}` : "Student";
   };
+
+  const parseAssessmentNotes = (notes: string | null) => {
+    if (!notes) return null;
+
+    try {
+      const parsed = JSON.parse(notes);
+      if (parsed && typeof parsed === "object") {
+        return parsed as Record<string, string>;
+      }
+    } catch {
+      // Fallback to plain text below
+    }
+
+    return { summary: notes };
+  };
+
+  const assessmentNotes = parseAssessmentNotes(caseAssessment?.notes || null);
 
   if (isLoading) {
     return (
@@ -292,6 +324,164 @@ export default function ScreeningDetailPage({
                 ))}
               </div>
             </div>
+
+            {caseAssessment && (
+              <div
+                className="rounded-lg border p-6 space-y-4 w-full"
+                style={{
+                  background: "var(--bg-light)",
+                  borderColor: "var(--border-muted)",
+                }}
+              >
+                <div>
+                  <h2
+                    className="text-base font-bold"
+                    style={{ color: "var(--text)" }}
+                  >
+                    Case Assessment
+                  </h2>
+                  <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                    Student-submitted information from the dialog
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div
+                      className="rounded-md border p-4"
+                      style={{ borderColor: "var(--border)" }}
+                    >
+                      <p
+                        className="text-xs uppercase tracking-wide"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Status
+                      </p>
+                      <p
+                        className="text-sm font-medium mt-1"
+                        style={{ color: "var(--text)" }}
+                      >
+                        {caseAssessment.status}
+                      </p>
+                    </div>
+                    <div
+                      className="rounded-md border p-4"
+                      style={{ borderColor: "var(--border)" }}
+                    >
+                      <p
+                        className="text-xs uppercase tracking-wide"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        Submitted
+                      </p>
+                      <p
+                        className="text-sm font-medium mt-1"
+                        style={{ color: "var(--text)" }}
+                      >
+                        {formatDate(caseAssessment.created_at)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {assessmentNotes ? (
+                    "summary" in assessmentNotes ? (
+                      <div
+                        className="rounded-md border p-4"
+                        style={{ borderColor: "var(--border)" }}
+                      >
+                        <p className="text-sm" style={{ color: "var(--text)" }}>
+                          {assessmentNotes.summary}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div
+                          className="rounded-md border p-4"
+                          style={{ borderColor: "var(--border)" }}
+                        >
+                          <p
+                            className="text-xs uppercase tracking-wide"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            Main Concern
+                          </p>
+                          <p
+                            className="text-sm mt-1"
+                            style={{ color: "var(--text)" }}
+                          >
+                            {assessmentNotes.primaryConcern || "Not provided"}
+                          </p>
+                        </div>
+                        <div
+                          className="rounded-md border p-4"
+                          style={{ borderColor: "var(--border)" }}
+                        >
+                          <p
+                            className="text-xs uppercase tracking-wide"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            Current Feelings
+                          </p>
+                          <p
+                            className="text-sm mt-1"
+                            style={{ color: "var(--text)" }}
+                          >
+                            {assessmentNotes.currentFeelings || "Not provided"}
+                          </p>
+                        </div>
+                        <div
+                          className="rounded-md border p-4"
+                          style={{ borderColor: "var(--border)" }}
+                        >
+                          <p
+                            className="text-xs uppercase tracking-wide"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            Support Needed
+                          </p>
+                          <p
+                            className="text-sm mt-1"
+                            style={{ color: "var(--text)" }}
+                          >
+                            {assessmentNotes.supportNeeded || "Not provided"}
+                          </p>
+                        </div>
+                        <div
+                          className="rounded-md border p-4"
+                          style={{ borderColor: "var(--border)" }}
+                        >
+                          <p
+                            className="text-xs uppercase tracking-wide"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            Additional Details
+                          </p>
+                          <p
+                            className="text-sm mt-1"
+                            style={{ color: "var(--text)" }}
+                          >
+                            {assessmentNotes.additionalDetails ||
+                              "Not provided"}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    <div
+                      className="rounded-md border p-4"
+                      style={{ borderColor: "var(--border)" }}
+                    >
+                      <p
+                        className="text-sm"
+                        style={{ color: "var(--text-muted)" }}
+                      >
+                        No case assessment notes were submitted.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Review Notes */}
             {!screening.reviewed_at && (

@@ -3,9 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardClientWrapper } from "@/components/DashboardClientWrapper";
+import {
+  CaseAssessmentDialog,
+  type CaseAssessmentFormValues,
+} from "@/components/screening/CaseAssessmentDialog";
 import { ScreeningResultDisplay } from "@/components/screening/ScreeningResultDisplay";
 import { ScreeningResult } from "@/lib/types/screening";
-import { getLatestScreeningResult } from "@/lib/actions/screening";
+import {
+  createCaseAssessment,
+  getLatestScreeningResult,
+} from "@/lib/actions/screening";
 import { MessageSquare, Calendar, RotateCcw } from "lucide-react";
 import { useAlert } from "@/hooks/useAlert";
 
@@ -14,6 +21,7 @@ export default function ScreeningResultsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [hasCaseAssessment, setHasCaseAssessment] = useState(false);
   const [isCreatingAssessment, setIsCreatingAssessment] = useState(false);
+  const [isAssessmentDialogOpen, setIsAssessmentDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { showAlert } = useAlert();
@@ -52,28 +60,39 @@ export default function ScreeningResultsPage() {
     fetchScreeningResult();
   }, [router]);
   const handleStartCaseAssessment = async () => {
+    setIsAssessmentDialogOpen(true);
+  };
+
+  const handleSubmitCaseAssessment = async (
+    values: CaseAssessmentFormValues,
+  ) => {
     if (!result?.id) return;
 
     setIsCreatingAssessment(true);
     try {
-      // Mark that user has started case assessment
+      const response = await createCaseAssessment(
+        result.id,
+        JSON.stringify(values),
+      );
+
+      if (response.error) {
+        showAlert({
+          type: "error",
+          message: response.error,
+        });
+        return;
+      }
+
       setHasCaseAssessment(true);
       sessionStorage.setItem("hasCaseAssessment", "true");
-      sessionStorage.setItem("startAssessmentFlow", "true");
-      // Dispatch event to update chat widget
-      window.dispatchEvent(new Event("caseAssessmentChanged"));
+      setIsAssessmentDialogOpen(false);
 
       showAlert({
         type: "success",
         message:
-          "Opening chat for case assessment. Please answer the questions to help us understand your situation better.",
+          "Your case assessment has been submitted and shared with the PSG member.",
         duration: 5000,
       });
-
-      // Small delay to ensure chat widget is enabled before opening
-      setTimeout(() => {
-        window.dispatchEvent(new Event("openChatForAssessment"));
-      }, 100);
     } catch (error) {
       console.error("Error starting case assessment:", error);
       showAlert({
@@ -164,6 +183,12 @@ export default function ScreeningResultsPage() {
             </div>
 
             <ScreeningResultDisplay result={result} />
+            <CaseAssessmentDialog
+              open={isAssessmentDialogOpen}
+              isSubmitting={isCreatingAssessment}
+              onClose={() => setIsAssessmentDialogOpen(false)}
+              onSubmit={handleSubmitCaseAssessment}
+            />
 
             {/* Next Steps and Info Cards Container */}
             <div className="space-y-6">
