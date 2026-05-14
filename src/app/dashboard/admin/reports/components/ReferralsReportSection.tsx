@@ -107,7 +107,7 @@ export function ReferralsReportSection({
                   style={{ borderBottom: "1px solid var(--border-muted)" }}
                 >
                   <td className="px-4 py-3" style={{ color: "var(--text)" }}>
-                    {new Date(referral.created_at).toLocaleDateString()}
+                    {new Date(referral.created_at).toLocaleString()}
                   </td>
                   <td className="px-4 py-3" style={{ color: "var(--text)" }}>
                     {referral.student_name}
