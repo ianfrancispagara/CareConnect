@@ -553,6 +553,7 @@ export async function getReferralReports(filters?: ReportFilters) {
         severity,
         created_at,
         updated_at,
+        screening:screening_results!referrals_screening_result_id_fkey(severity_score, color_code),
         student:profiles!referrals_student_id_fkey(id, full_name, school_id),
         assigned_psg_member:profiles!referrals_assigned_psg_member_id_fkey(full_name)
       `,
@@ -592,7 +593,30 @@ export async function getReferralReports(filters?: ReportFilters) {
           : ref.assigned_psg_member;
         const source = ref.source || "unknown";
         const status = ref.status || "unknown";
-        const severity = ref.severity || "unknown";
+
+        // If this referral came from a screening, prefer the screening's
+        // severity_level (or color_code fallback) unless an explicit
+        // referral.severity was provided by PSG/admin.
+        const screening = Array.isArray(ref.screening)
+          ? ref.screening[0]
+          : ref.screening;
+
+        let severity = ref.severity || null;
+        if ((!severity || severity === "unknown") && screening) {
+          // Prefer color_code if present
+          if (screening.color_code) {
+            if (screening.color_code === "red") severity = "high";
+            else if (screening.color_code === "yellow") severity = "moderate";
+            else severity = "low";
+          } else if (typeof screening.severity_score === "number") {
+            // Map numeric score to severity (same thresholds as screening.calc)
+            const score = screening.severity_score;
+            if (score >= 70) severity = "high";
+            else if (score >= 40) severity = "moderate";
+            else severity = "low";
+          }
+        }
+        severity = severity || "unknown";
         return {
           id: ref.id,
           student_name: student?.full_name || "Unknown",

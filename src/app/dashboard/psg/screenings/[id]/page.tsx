@@ -55,6 +55,13 @@ export default function ScreeningDetailPage({
         }
 
         setScreening(result.data.screening);
+        // Default triage decision should reflect screening severity
+        const colorCode = result.data.screening?.color_code;
+        if (colorCode) {
+          if (colorCode === "red") setTriageLevel("needs_immediate_help");
+          else if (colorCode === "yellow") setTriageLevel("moderate");
+          else setTriageLevel("good");
+        }
         setResponses(result.data.responses);
         setCaseAssessment(result.data.caseAssessment || null);
 
